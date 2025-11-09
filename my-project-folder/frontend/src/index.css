@@ -1,0 +1,16 @@
+/* 기존 내용 (있다면) 아래에 추가하거나, 이 내용으로 덮어쓰기 */
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  /* --- ★ 이 부분을 추가/수정하세요 --- */
+  margin: 0;
+  padding: 0;
+  background-color: #121212; /* 다크 모드 배경색 */
+  color: #ffffff; /* 기본 텍스트 색상 */
+  /* --- ★ 여기까지 --- */
+}
