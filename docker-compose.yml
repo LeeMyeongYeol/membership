@@ -6,28 +6,28 @@ services:
     image: ankane/pgvector:v0.5.1 # pgvector가 포함된 이미지 사용
     container_name: movie_db
     environment:
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=admin
-      - POSTGRES_DB=movie_db
+      - POSTGRES_USER=${DB_USER:-admin}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-admin}
+      - POSTGRES_DB=${DB_NAME:-movie_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data # 데이터 영속성 유지
     ports:
       - "8888:5432" # DB 포트 (호스트 PC에서 DB Tool로 접속 가능)
+    env_file:
+      - ./.env
 
   # 2. 백엔드 (FastAPI)
   api:
     container_name: movie_api
     build: ./backend # ./backend 폴더의 Dockerfile을 빌드
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: bash startup.sh  # startup 스크립트 실행 (DB 초기화 + API 서버 시작)
     volumes:
       - ./backend:/app # 호스트의 ./backend 폴더를 컨테이너 /app에 마운트
     ports:
       - "8000:8000" # API 서버 포트
     depends_on:
       - db          # DB가 실행된 후에 API 서버가 실행되도록 설정
-    environment:
-      - DATABASE_URL=postgresql://admin:admin@db:5432/movie_db
-    env_file: 
+    env_file:
       - ./.env
 
   # 3. 프론트엔드 (React)

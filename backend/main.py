@@ -1,7 +1,12 @@
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 import os  # 환경 변수를 사용하기 위해 추가
+
+# 로컬 모듈 import
+from database import get_db
+from movie_service import save_movie_to_db, get_movie_by_id, get_all_movies, delete_movie, movie_to_dict
 
 # --- FastAPI 앱 생성 ---
 app = FastAPI()
@@ -86,3 +91,92 @@ async def search_movies(query: str):
         for movie in search_results[:10]  # 상위 10개 결과만 반환
     ]
     return simplified_results
+
+
+@app.post("/movies/{movie_id}")
+async def save_movie(movie_id: int, db: Session = Depends(get_db)):
+    """
+    사용자가 선택한 영화를 DB에 저장합니다.
+    TMDb에서 상세 정보(줄거리, 키워드, 장르)를 가져와 저장합니다.
+
+    Args:
+        movie_id: TMDb 영화 ID
+        db: DB 세션 (의존성 주입)
+
+    Returns:
+        저장된 영화 정보
+    """
+    movie = await save_movie_to_db(movie_id, db)
+
+    if not movie:
+        raise HTTPException(status_code=500, detail="Failed to save movie")
+
+    return {
+        "status": "success",
+        "message": f"Movie '{movie.title}' saved successfully",
+        "movie": movie_to_dict(movie)
+    }
+
+
+@app.get("/movies/{movie_id}")
+def get_movie(movie_id: int, db: Session = Depends(get_db)):
+    """
+    DB에서 영화 정보를 조회합니다.
+
+    Args:
+        movie_id: 영화 ID
+        db: DB 세션 (의존성 주입)
+
+    Returns:
+        영화 정보
+    """
+    movie = get_movie_by_id(movie_id, db)
+
+    if not movie:
+        raise HTTPException(status_code=404, detail="Movie not found")
+
+    return movie_to_dict(movie)
+
+
+@app.get("/movies")
+def list_movies(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """
+    DB에 저장된 모든 영화 목록을 조회합니다.
+
+    Args:
+        skip: 건너뛸 개수 (페이지네이션)
+        limit: 가져올 최대 개수
+        db: DB 세션 (의존성 주입)
+
+    Returns:
+        영화 목록
+    """
+    movies = get_all_movies(db, skip, limit)
+
+    return {
+        "total": len(movies),
+        "movies": [movie_to_dict(movie) for movie in movies]
+    }
+
+
+@app.delete("/movies/{movie_id}")
+def remove_movie(movie_id: int, db: Session = Depends(get_db)):
+    """
+    DB에서 영화를 삭제합니다.
+
+    Args:
+        movie_id: 영화 ID
+        db: DB 세션 (의존성 주입)
+
+    Returns:
+        삭제 결과
+    """
+    success = delete_movie(movie_id, db)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Movie not found or could not be deleted")
+
+    return {
+        "status": "success",
+        "message": f"Movie ID {movie_id} deleted successfully"
+    }

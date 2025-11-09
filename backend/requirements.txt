@@ -3,3 +3,4 @@ uvicorn
 httpx
 sqlalchemy
 psycopg2-binary  # PostgreSQL 연결 드라이버
+pgvector  # pgvector 지원
