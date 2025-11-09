@@ -14,35 +14,46 @@
    - 한국어 우선 검색 결과 제공
    - 포스터 이미지, 제목, 개봉연도 표시
 
-2. **영화 저장 기능**
-   - 사용자가 선택한 영화를 PostgreSQL DB에 저장
+2. **영화 저장 및 관리**
+   - 검색한 영화를 내 목록에 추가
    - TMDb API에서 영화 상세 정보 자동 수집 (줄거리, 키워드, 장르)
-   - 관계형 데이터 구조로 효율적 저장 (movies, genres, keywords 테이블)
+   - PostgreSQL DB에 자동 저장
    - 중복 저장 방지 기능
+   - 목록에서 영화 제거 (X 버튼)
 
-3. **저장된 영화 관리**
-   - 저장된 영화 목록을 카드 형태로 시각화
-   - 영화별 평점, 장르, 개봉연도 표시
-   - 우상단 X 버튼으로 영화 삭제 기능
-   - 삭제 전 확인 대화상자
+3. **영화 대량 수집**
+   - TMDb API에서 인기 영화 자동 수집
+   - 4가지 카테고리 지원 (popular, top_rated, now_playing, upcoming)
+   - 장르별 영화 수집 (28개 장르)
+   - 500-1000개 영화 일괄 수집 가능
 
-4. **데이터베이스 스키마**
-   - PostgreSQL + pgvector 확장 활성화
-   - 5개 테이블 구조 (movies, genres, keywords, movie_genres, movie_keywords, movie_vectors)
-   - CASCADE 설정으로 관계 데이터 자동 관리
-   - HNSW 인덱스로 벡터 검색 최적화 준비
-
-5. **TF-IDF 벡터 생성 (신규!)**
-   - 영화 줄거리와 키워드 기반 TF-IDF 벡터화
+4. **TF-IDF 벡터 생성**
+   - 영화 줄거리, 키워드, 장르 기반 TF-IDF 벡터화
    - 한국어 형태소 분석 (konlpy Okt) 적용
+   - 최적화된 가중치 (장르 5배, 줄거리 3배, 키워드 2배)
    - scikit-learn TfidfVectorizer로 512차원 벡터 생성
-   - pgvector에 저장하여 유사도 검색 준비
+   - pgvector에 저장하여 고속 유사도 검색
    - 배치 생성 및 자동 생성 두 가지 방식 지원
 
-### 🚧 구현 예정
+5. **영화 추천 시스템 (신규!)**
+   - 사용자가 선택한 영화들을 기반으로 취향 벡터 생성
+   - pgvector 코사인 유사도 계산으로 유사 영화 추천
+   - 추천 개수 조절 가능 (10-50개)
+   - 유사도 점수 표시 (백분율)
+   - 자동 벡터 생성 (선택한 영화에 벡터가 없으면 즉시 생성)
+   - 순위 및 유사도 배지 표시
 
-- **취향 분석**: 사용자가 선택한 영화 목록을 기반으로 TF-IDF 벡터 생성
-- **영화 추천**: 생성된 취향 벡터와 pgvector에 저장된 영화 벡터 간의 코사인 유사도 계산하여 맞춤형 영화 추천
+6. **데이터베이스 스키마**
+   - PostgreSQL + pgvector 확장 활성화
+   - 6개 테이블 구조 (movies, genres, keywords, movie_genres, movie_keywords, movie_vectors)
+   - CASCADE 설정으로 관계 데이터 자동 관리
+   - HNSW 인덱스로 벡터 검색 최적화
+
+### 🎯 핵심 기능 플로우
+
+```
+영화 검색 → 내 목록 추가 → 추천 받기 → 맞춤 영화 발견!
+```
 
 ## 🛠️ 기술 스택 (Tech Stack)
 
@@ -253,76 +264,110 @@ movie-recommender/
 
 ## 🎯 사용 방법
 
-### 기본 사용법
+### 🚀 Quick Start
 
-1. **영화 검색**: 검색창에 영화 제목 입력 (예: "인셉션", "기생충")
-2. **영화 선택**: 드롭다운에서 원하는 영화 클릭
-3. **영화 저장**: "이 영화 저장하기" 버튼 클릭
-   - 영화 저장 시 TF-IDF 벡터가 자동으로 생성됩니다 (vectorizer가 있는 경우)
-4. **저장 확인**: 하단에 저장된 영화 카드 표시
-5. **영화 삭제**: 영화 카드 우상단의 X 버튼 클릭
+#### 1단계: 초기 설정 (최초 1회만)
 
-### 영화 데이터 대량 수집 (중요!)
-
-추천 시스템을 위해서는 많은 영화 데이터가 필요합니다. 영화 수집 스크립트를 사용하세요.
-
-```bash
-# 컨테이너에 접속
-docker exec -it movie_api bash
-
-# 500개 영화 수집 (기본값)
-python collect_movies.py --limit 500
-
-# 특정 카테고리에서만 수집
-python collect_movies.py --categories popular top_rated --limit 300
-
-# 장르별 영화도 포함
-python collect_movies.py --limit 1000 --include-genres
-```
-
-**수집 카테고리:**
-- `popular`: 인기 영화
-- `top_rated`: 평점 높은 영화
-- `now_playing`: 현재 상영 중
-- `upcoming`: 개봉 예정
-
-**주의:** TMDb API는 무료 플랜에서 초당 요청 제한이 있습니다. 스크립트는 자동으로 지연을 추가하지만, 대량 수집 시 시간이 걸릴 수 있습니다.
-
-### TF-IDF 벡터 생성
-
-영화 수집 후 벡터를 생성해야 추천이 가능합니다.
-
-#### 방법 1: 배치 생성 (필수!)
-모든 영화에 대해 한 번에 TF-IDF 벡터를 생성합니다. 전체 corpus를 기반으로 하므로 더 정확합니다.
+Docker 컨테이너가 실행되면 초기 데이터를 수집합니다.
 
 ```bash
 # 컨테이너 접속
 docker exec -it movie_api bash
 
-# 벡터 생성 스크립트 실행
+# 영화 500-1000개 수집 (약 8-15분 소요)
+python collect_movies.py --limit 1000 --include-genres
+
+# TF-IDF 벡터 생성 (약 3-7분 소요)
+python generate_tfidf_vectors.py
+
+# 완료! 이제 추천 시스템 사용 가능
+exit
+```
+
+#### 2단계: 웹 인터페이스 사용
+
+브라우저에서 `http://localhost:5173` 접속
+
+**추천 받기:**
+1. **영화 검색**: 검색창에 좋아하는 영화 제목 입력 (예: "인셉션", "기생충")
+2. **목록 추가**: 검색 결과에서 영화 클릭 → "내 목록에 추가하기" 버튼 클릭
+3. **여러 영화 추가**: 3-10개의 영화를 추가 (더 많을수록 정확한 추천)
+4. **추천 개수 선택**: 슬라이더로 10-50개 조정
+5. **추천 받기**: "🎯 영화 추천 받기" 버튼 클릭
+6. **결과 확인**: 유사도 점수와 함께 맞춤 영화 추천!
+
+**팁:**
+- 다양한 장르의 영화를 섞어서 추가하면 더 흥미로운 추천을 받을 수 있습니다
+- 처음 추천 받을 때 벡터가 자동 생성되므로 조금 느릴 수 있습니다 (이후는 빠름)
+- X 버튼으로 목록에서 영화 제거 가능
+
+### 📚 영화 데이터베이스 관리
+
+#### 영화 대량 수집
+
+```bash
+docker exec -it movie_api bash
+
+# 기본 수집 (500개)
+python collect_movies.py --limit 500
+
+# 특정 카테고리만
+python collect_movies.py --categories popular top_rated --limit 300
+
+# 장르별 영화 포함 (추천)
+python collect_movies.py --limit 1000 --include-genres
+```
+
+**수집 카테고리:**
+- `popular`: 현재 인기 영화
+- `top_rated`: 평점 높은 명작
+- `now_playing`: 현재 상영 중
+- `upcoming`: 개봉 예정
+
+#### TF-IDF 벡터 재생성
+
+영화를 추가로 수집했거나, 가중치를 변경한 경우:
+
+```bash
+docker exec -it movie_api bash
+
+# 기존 vectorizer 삭제
+rm -f /app/data/tfidf_vectorizer.pkl
+
+# 새로 생성
 python generate_tfidf_vectors.py
 ```
 
-#### 방법 2: 자동 생성
-- 배치 생성을 먼저 실행한 후, 새로운 영화를 저장하면 자동으로 벡터가 생성됩니다
-- 저장된 vectorizer를 사용하여 일관성 있는 벡터를 생성합니다
+### 🔧 고급 사용법
 
-### 권장 워크플로우
+#### DBeaver로 데이터베이스 확인
+
+```
+Host: localhost
+Port: 8888
+Database: movie_db
+Username: admin
+Password: admin
+```
+
+#### 추천 시스템 통계 확인
 
 ```bash
-# 1. 컨테이너 접속
-docker exec -it movie_api bash
+curl http://localhost:8000/recommendation/stats
+```
 
-# 2. 영화 500개 수집 (약 5-10분 소요)
-python collect_movies.py --limit 500
+#### API 직접 호출
 
-# 3. TF-IDF 벡터 생성 (약 2-5분 소요)
-python generate_tfidf_vectors.py
-
-# 4. 이제 추천 시스템 사용 준비 완료!
+```bash
+# 추천 받기 (영화 ID 27205, 496243 기반)
+curl -X POST "http://localhost:8000/recommend" \
+  -H "Content-Type: application/json" \
+  -d '{"movie_ids": [27205, 496243], "limit": 20}'
 ```
 
 ## 🔧 API 엔드포인트
+
+### 기본 API
 
 | Method | Endpoint | 설명 |
 |--------|----------|------|
@@ -332,6 +377,49 @@ python generate_tfidf_vectors.py
 | GET | `/movies/{movie_id}` | 영화 조회 |
 | GET | `/movies?skip={skip}&limit={limit}` | 영화 목록 조회 |
 | DELETE | `/movies/{movie_id}` | 영화 삭제 |
+
+### 추천 시스템 API (신규!)
+
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| POST | `/recommend` | 영화 추천 받기 |
+| GET | `/movies/{movie_id}/similar?limit={limit}` | 유사 영화 찾기 |
+| GET | `/recommendation/stats` | 추천 시스템 통계 |
+
+### 추천 API 상세
+
+#### POST /recommend
+```json
+// Request
+{
+  "movie_ids": [27205, 496243, 680],
+  "limit": 20
+}
+
+// Response
+{
+  "status": "success",
+  "selected_movies": [27205, 496243, 680],
+  "vector_generation": {
+    "total": 3,
+    "already_exists": 3,
+    "newly_created": 0,
+    "failed": 0
+  },
+  "total_recommendations": 20,
+  "recommendations": [
+    {
+      "id": 157336,
+      "title": "인터스텔라",
+      "similarity": 0.87,
+      "similarity_percent": 87.0,
+      "vote_average": 8.4,
+      "genres": [...],
+      "overview": "..."
+    }
+  ]
+}
+```
 
 ## 📊 데이터베이스 ERD
 
@@ -361,6 +449,47 @@ movie_vectors (TF-IDF)
 ├─ movie_id (PK, FK)
 ├─ tfidf_vector (vector(512))
 └─ timestamps
+```
+
+## 🧠 추천 알고리즘 설명
+
+### TF-IDF 기반 콘텐츠 필터링
+
+1. **특징 추출**
+   ```
+   각 영화를 텍스트로 변환:
+   - 장르 × 5 (가장 중요)
+   - 줄거리 × 3 (내용 파악)
+   - 키워드 × 2 (세부 특징)
+   ```
+
+2. **벡터화**
+   ```
+   한국어 형태소 분석 (Okt)
+   → TfidfVectorizer (512차원)
+   → pgvector 저장
+   ```
+
+3. **취향 벡터 생성**
+   ```
+   사용자가 선택한 영화들의 벡터 평균
+   → 사용자 취향을 나타내는 하나의 벡터
+   ```
+
+4. **유사도 계산**
+   ```
+   pgvector 코사인 유사도 (<=> 연산자)
+   → 유사도 높은 순으로 정렬
+   → 상위 N개 추천
+   ```
+
+### 최적화 포인트
+
+- **가중치**: 장르 > 줄거리 > 키워드
+- **N-gram**: 1-gram + 2-gram (문맥 파악)
+- **필터링**: 너무 희귀하거나 흔한 단어 제거
+- **정규화**: L2 norm, sublinear TF 적용
+- **인덱싱**: HNSW 인덱스로 빠른 검색
 ```
 
 ## 📄 라이센스
