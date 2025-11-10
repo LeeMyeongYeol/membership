@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Movie Finder</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <div class="hwrap">
+    <div class="brand">
+      <div class="logo">🎬</div>
+      <strong>Movie Finder</strong>
+    </div>
+    <div class="head-actions">
+      <!-- 검색 아이콘: 인라인 SVG (깨짐/캐시 문제 없음) -->
+      <button id="openBtn" class="icon-btn" title="검색 열기" aria-label="검색 열기">
+        <svg class="icon-img" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+             width="24" height="24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- 검색 패널 (아이콘으로 열고, Enter로만 닫힘) -->
+  <div id="panel" class="panel" hidden>
+    <div class="row">
+      <div class="token-input" id="tokenInput">
+        <div id="tokenList"></div>
+        <input id="query" placeholder="검색어 입력 후 Enter를 누르면 패널이 닫혀요" />
+      </div>
+      <button id="closeBtn" class="icon-btn" title="닫기" aria-label="닫기">✕</button>
+    </div>
+
+    <button id="clearAllBtn" class="clear-all">카테고리 전부 지우기</button>
+
+    <div class="grid">
+      <div class="col">
+        <div class="section"><strong>장르 (Genre)</strong></div>
+        <div class="chips" id="chipsGenre"></div>
+      </div>
+      <div class="col">
+        <div class="section"><strong>국가 / 지역</strong></div>
+        <div class="chips" id="chipsRegion"></div>
+      </div>
+      <div class="col">
+        <div class="section"><strong>테마 (Theme)</strong></div>
+        <div class="chips" id="chipsTheme"></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- 선택한 영화: 이름칩만 표시 (그리드 포스터는 숨기지 않음, 흰 테두리만) -->
+  <section class="selected-names">
+    <div class="sel-names-head">
+      <strong>선택한 영화</strong>
+      <span class="muted" id="selNamesCount">0/10</span>
+      <div class="spacer"></div>
+      <button id="clearSelBtnTop" class="ghost small">모두 해제</button>
+    </div>
+    <div id="selNameChips" class="name-chips"></div>
+  </section>
+
+  <div id="status" class="status"></div>
+
+  <!-- 4열 그리드 -->
+  <div id="movie-list" class="movie-grid"></div>
+  <div id="sentinel" class="sentinel"></div>
+</main>
+
+<!-- 하단 바: 카운트 + 우측 버튼 -->
+<div class="pickerbar" id="pickerBar">
+  <div class="sel-info"><strong id="selCount">0</strong>/10 선택됨</div>
+  <div class="sel-actions">
+    <button id="clearSelBtnBottom" class="ghost">모두 해제</button>
+    <button id="recommendBtn" class="primary" disabled>추천</button>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
