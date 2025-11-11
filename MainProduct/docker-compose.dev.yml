@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # 백엔드 (개발 모드)
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: movie-reco-api-dev
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - DEBUG=True
+    command: python app.py
+    restart: always
+    networks:
+      - movie-network
+
+  # 프론트엔드 (개발 모드 - Hot Reload)
+  frontend:
+    image: node:18-alpine
+    container_name: movie-reco-frontend-dev
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      - api
+    restart: always
+    networks:
+      - movie-network
+
+networks:
+  movie-network:
+    driver: bridge
