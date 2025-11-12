@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import './PopularMovies.css'
 
@@ -17,31 +17,38 @@ function PopularMovies() {
   const [query, setQuery] = useState('')
   const [panelOpen, setPanelOpen] = useState(false)
   const [currentItems, setCurrentItems] = useState([])
-  const [selected, setSelected] = useState([])
   const [loading, setLoading] = useState(false)
   const [noMore, setNoMore] = useState(false)
   const [status, setStatus] = useState('')
-  const [mode, setMode] = useState('popular') // 'popular' | 'discover' | 'search'
-  const [queryState, setQueryState] = useState({ q: '', lang: '', page: 1 })
+  const [currentPage, setCurrentPage] = useState(1)
 
   const sentinelRef = useRef(null)
   const queryInputRef = useRef(null)
 
-  // 키 생성
-  const keyOf = (item) => {
-    if (item.source === 'TMDb' && item.id) return `tmdb:${item.id}`
-    const t = (item.title || '').toLowerCase()
-    return `title:${t}|${item.year || ''}`
-  }
-
-  const isSelected = (item) => selected.some(s => keyOf(s) === keyOf(item))
-
   const posterUrl = (path) => path ? `${POSTER_BASE}${path}` : ''
+
+  // 토큰 분류
+  const categorizeTokens = () => {
+    const genreTokens = tokens.filter(t => GENRES.some(g => g.includes(t) || t.includes(g.split('(')[0].trim())))
+    const themeTokens = tokens.filter(t => THEMES.some(th => th.includes(t) || t.includes(th.split('(')[0].trim())))
+    const regionToken = tokens.find(t => REGION_LANG[t]) || null
+    
+    return { genreTokens, themeTokens, regionToken }
+  }
 
   // API 호출
   const apiGet = async (path, params = {}) => {
     try {
       const response = await axios.get(`${API_BASE}${path}`, { params })
+      return response.data
+    } catch (error) {
+      throw new Error(error.response?.data?.error || error.message)
+    }
+  }
+
+  const apiPost = async (path, data = {}) => {
+    try {
+      const response = await axios.post(`${API_BASE}${path}`, data)
       return response.data
     } catch (error) {
       throw new Error(error.response?.data?.error || error.message)
@@ -66,74 +73,30 @@ function PopularMovies() {
     }))
   }
 
-  const fetchByMode = async (page) => {
-    if (mode === 'popular') {
-      try {
-        return await fetchPopularBackend(page)
-      } catch {
-        return await fetchPopularFront(page)
-      }
-    } else if (mode === 'discover') {
-      const { items } = await apiGet('/api/discover/lang', { lang: queryState.lang, page })
-      return items || []
-    } else { // 'search'
-      const { items } = await apiGet('/api/search', { q: queryState.q, source: 'both', page })
-      return items || []
-    }
-  }
-
-  const filterDiscover = (list, extrasLower, textLower) => {
-    if (!extrasLower.length && !textLower) return list
-    return list.filter(m => {
-      const title = (m.title || '').toLowerCase()
-      const okExtra = extrasLower.every(k => title.includes(k.split(' ')[0]))
-      const okText = textLower ? title.includes(textLower) : true
-      return okExtra && okText
+  // 새로운 discover API 호출
+  const fetchDiscover = async (pageNum = 1) => {
+    const { genreTokens, themeTokens, regionToken } = categorizeTokens()
+    
+    const lang = regionToken ? REGION_LANG[regionToken] : 'ko-KR'
+    
+    const response = await apiPost('/api/discover', {
+      genres: genreTokens,
+      themes: themeTokens,
+      language: lang,
+      page: pageNum
     })
+    
+    return response.items || []
   }
 
-  const fetchAtLeastFour = async () => {
-    let acc = []
-    let guard = 0
-    let currentPage = queryState.page
-
-    while (acc.length < 4 && guard < 6 && !noMore) {
-      const batch = await fetchByMode(currentPage)
-      if (!batch.length) {
-        setNoMore(true)
-        break
-      }
-
-      let list = batch
-      if (mode === 'discover') {
-        const extras = tokens.filter(t => !REGION_LANG[t]).map(s => s.toLowerCase())
-        const text = query.trim().toLowerCase()
-        list = filterDiscover(batch, extras, text)
-      }
-
-      acc.push(...list)
-      currentPage += 1
-      guard += 1
-    }
-
-    setQueryState(prev => ({ ...prev, page: currentPage }))
-    return acc
-  }
-
-  // 선택 토글
-  const toggleSelection = (item) => {
-    const k = keyOf(item)
-    const exists = isSelected(item)
-
-    if (!exists) {
-      if (selected.length >= 10) {
-        alert('최대 10개까지 선택할 수 있어요.')
-        return
-      }
-      setSelected(prev => [...prev, item])
-    } else {
-      setSelected(prev => prev.filter(s => keyOf(s) !== k))
-    }
+  // 검색 API 호출
+  const fetchSearch = async (searchQuery, pageNum = 1) => {
+    const { items } = await apiGet('/api/search', { 
+      q: searchQuery, 
+      source: 'both', 
+      page: pageNum 
+    })
+    return items || []
   }
 
   // 토큰 추가
@@ -146,137 +109,86 @@ function PopularMovies() {
     }
   }
 
-  // 검색 수행
-  const performSearch = async (closeAfter = false) => {
-    const regionToken = tokens.find(t => REGION_LANG[t]) || null
-    const text = query.trim()
-    let out = []
-
+  // 영화 불러오기
+  const loadMovies = async (page = 1, append = false) => {
+    setLoading(true)
     try {
-      if (regionToken) {
-        setMode('discover')
-        const newQueryState = { q: '', lang: REGION_LANG[regionToken], page: 1 }
-        setQueryState(newQueryState)
-        setStatus(`${regionToken} 불러오는 중…`)
-
-        const { items: first } = await apiGet('/api/discover/lang', { lang: newQueryState.lang, page: 1 })
-        out = first || []
-
-        const extras = tokens.filter(t => !REGION_LANG[t]).map(s => s.toLowerCase())
-        const tLower = text.toLowerCase()
-        out = filterDiscover(out, extras, tLower)
-
-        setQueryState(prev => ({ ...prev, page: 2 }))
-
-        if (out.length < 4) {
-          const more = await fetchAtLeastFour()
-          out = [...out, ...more]
+      let movies = []
+      
+      // 토큰이나 검색어가 있으면
+      if (tokens.length > 0 || query.trim()) {
+        const { genreTokens, themeTokens } = categorizeTokens()
+        
+        // 검색어가 있으면 검색 우선
+        if (query.trim()) {
+          const searchQuery = [...tokens, query.trim()].join(' ')
+          setStatus(`"${searchQuery}" 검색 중...`)
+          movies = await fetchSearch(searchQuery, page)
         }
-      } else {
-        const combined = [...tokens, text].filter(Boolean).join(' ').trim()
-        if (combined) {
-          setMode('search')
-          setQueryState({ q: combined, lang: '', page: 1 })
-          setStatus(`"${combined}" 검색 중…`)
-
-          const { items: first } = await apiGet('/api/search', { q: combined, source: 'both', page: 1 })
-          out = first || []
-          setQueryState(prev => ({ ...prev, page: 2 }))
-
-          if (out.length < 4) {
-            const more = await fetchAtLeastFour()
-            out = [...out, ...more]
+        // 장르나 테마 토큰이 있으면 discover
+        else if (genreTokens.length > 0 || themeTokens.length > 0) {
+          setStatus('영화 필터링 중...')
+          movies = await fetchDiscover(page)
+        }
+        // 국가 토큰만 있으면 인기영화 (해당 언어)
+        else {
+          setStatus('인기 영화 불러오는 중...')
+          try {
+            movies = await fetchPopularBackend(page)
+          } catch {
+            movies = await fetchPopularFront(page)
           }
-        } else {
-          setMode('popular')
-          setQueryState({ q: '', lang: '', page: 1 })
-          out = await fetchAtLeastFour()
+        }
+      }
+      // 아무것도 없으면 인기영화
+      else {
+        setStatus('인기 영화 불러오는 중...')
+        try {
+          movies = await fetchPopularBackend(page)
+        } catch {
+          movies = await fetchPopularFront(page)
         }
       }
 
-      setCurrentItems(out)
-      setStatus(`${out.length}개 결과`)
-      setNoMore(false)
-      if (closeAfter) setPanelOpen(false)
+      if (movies.length === 0) {
+        setNoMore(true)
+        setStatus(append ? `총 ${currentItems.length}개 결과` : '결과가 없습니다')
+      } else {
+        if (append) {
+          setCurrentItems(prev => [...prev, ...movies])
+          setStatus(`${currentItems.length + movies.length}개 결과`)
+        } else {
+          setCurrentItems(movies)
+          setStatus(`${movies.length}개 결과`)
+        }
+        setCurrentPage(page)
+      }
     } catch (e) {
       console.error(e)
-      setStatus('검색 중 오류가 발생했습니다.')
+      setStatus('오류가 발생했습니다: ' + e.message)
+    } finally {
+      setLoading(false)
     }
   }
 
-  // 추천(유사작)
-  const tmdbSimilarIds = async (tmdbId) => {
-    const url = `https://api.themoviedb.org/3/movie/${tmdbId}/similar?api_key=${encodeURIComponent(TMDB_API_KEY_FRONT)}&language=ko-KR&page=1`
-    const response = await axios.get(url)
-    return (response.data.results || []).map(n => ({
-      title: n.title || n.name || '',
-      year: (n.release_date || n.first_air_date || '').slice(0, 4),
-      poster: n.poster_path ? (POSTER_BASE + n.poster_path) : '',
-      source: 'TMDb',
-      id: n.id,
-      tmdbId: n.id,
-      popularity: n.popularity || 0
-    }))
-  }
-
-  const dedup = (items) => {
-    const seen = new Set()
-    const out = []
-    for (const m of items) {
-      const k = m.tmdbId ? `tmdb:${m.tmdbId}` : keyOf(m)
-      if (seen.has(k)) continue
-      seen.add(k)
-      out.push(m)
-    }
-    return out
-  }
-
-  const recommendSimilar = async () => {
-    if (selected.length === 0) return
-    setStatus('비슷한 영화 불러오는 중…')
-
-    const bag = []
-    for (const base of selected) {
-      try {
-        const tid = base.id
-        if (!tid) continue
-        const sims = await tmdbSimilarIds(tid)
-        bag.push(...sims)
-      } catch (e) {
-        console.warn('similar fail', e)
-      }
-    }
-
-    const exclude = new Set(selected.map(keyOf))
-    let cands = bag.filter(m => !exclude.has(keyOf(m)))
-
-    const score = new Map()
-    for (const m of cands) {
-      const k = `tmdb:${m.tmdbId || m.id || m.title}`
-      const prev = score.get(k) || { item: m, count: 0, pop: 0 }
-      prev.count += 1
-      prev.pop = Math.max(prev.pop, m.popularity || 0)
-      score.set(k, prev)
-    }
-
-    const ranked = [...score.values()].sort((a, b) => (b.count - a.count) || (b.pop - a.pop)).map(x => x.item)
-    const result = dedup(ranked).slice(0, 40)
-
-    setCurrentItems(result)
-    setStatus(`추천 결과 ${result.length}개`)
+  // 검색 수행
+  const performSearch = async (closeAfter = false) => {
+    setNoMore(false)
+    await loadMovies(1, false)
+    if (closeAfter) setPanelOpen(false)
   }
 
   // 초기 로드
   useEffect(() => {
-    setMode('popular')
-    setQueryState({ q: '', lang: '', page: 1 })
-    setNoMore(false)
-
-    fetchAtLeastFour().then(list => {
-      setCurrentItems(list)
-      setStatus(`${list.length}개 결과`)
-    })
+    loadMovies(1, false)
   }, [])
+
+  // 토큰 변경 시 검색
+  useEffect(() => {
+    if (tokens.length > 0) {
+      loadMovies(1, false)
+    }
+  }, [tokens])
 
   // 무한 스크롤
   useEffect(() => {
@@ -287,21 +199,7 @@ function PopularMovies() {
         const entry = entries[0]
         if (!entry.isIntersecting || loading || noMore) return
 
-        setLoading(true)
-        try {
-          const chunk = await fetchAtLeastFour()
-          if (chunk.length === 0) {
-            setNoMore(true)
-          } else {
-            setCurrentItems(prev => [...prev, ...chunk])
-            setStatus(`${currentItems.length + chunk.length}개 결과`)
-          }
-        } catch (e) {
-          console.error(e)
-          setNoMore(true)
-        } finally {
-          setLoading(false)
-        }
+        await loadMovies(currentPage + 1, true)
       },
       { threshold: 0.1 }
     )
@@ -309,14 +207,7 @@ function PopularMovies() {
     observer.observe(sentinelRef.current)
 
     return () => observer.disconnect()
-  }, [loading, noMore, currentItems.length])
-
-  // 토큰 변경 시 검색
-  useEffect(() => {
-    if (tokens.length > 0 || query) {
-      performSearch(false)
-    }
-  }, [tokens])
+  }, [loading, noMore, currentPage])
 
   return (
     <div className="popular-movies">
@@ -348,7 +239,9 @@ function PopularMovies() {
                   {tokens.map((t, i) => (
                     <span key={i} className="token-chip">
                       <span>{t}</span>
-                      <button onClick={() => setTokens(prev => prev.filter((_, idx) => idx !== i))}>✕</button>
+                      <button onClick={() => {
+                        setTokens(prev => prev.filter((_, idx) => idx !== i))
+                      }}>✕</button>
                     </span>
                   ))}
                 </div>
@@ -371,7 +264,10 @@ function PopularMovies() {
               <button className="icon-btn" onClick={() => setPanelOpen(false)}>✕</button>
             </div>
 
-            <button className="clear-all" onClick={() => setTokens([])}>카테고리 전부 지우기</button>
+            <button className="clear-all" onClick={() => {
+              setTokens([])
+              setQuery('')
+            }}>카테고리 전부 지우기</button>
 
             <div className="grid">
               <div className="col">
@@ -404,32 +300,11 @@ function PopularMovies() {
       </header>
 
       <main>
-        <section className="selected-names">
-          <div className="sel-names-head">
-            <strong>선택한 영화</strong>
-            <span className="muted">{selected.length}/10</span>
-            <div className="spacer"></div>
-            <button className="ghost small" onClick={() => setSelected([])}>모두 해제</button>
-          </div>
-          <div className="name-chips">
-            {selected.map((s, idx) => (
-              <span key={idx} className="name-chip">
-                <span className="nm">{s.title || '(제목 없음)'}</span>
-                <button className="x" onClick={() => setSelected(prev => prev.filter((_, i) => i !== idx))}>✕</button>
-              </span>
-            ))}
-          </div>
-        </section>
-
         <div className="status">{status}</div>
 
         <div className="movie-grid">
           {currentItems.map((m, idx) => (
-            <div
-              key={`${keyOf(m)}-${idx}`}
-              className={`card ${isSelected(m) ? 'selected' : ''}`}
-              onClick={() => toggleSelection(m)}
-            >
+            <div key={`${m.id}-${idx}`} className="card">
               <img className="thumb" src={m.poster || ''} alt={m.title} />
               <div className="meta">
                 <div className="title">
@@ -443,14 +318,6 @@ function PopularMovies() {
         </div>
         <div ref={sentinelRef} className="sentinel"></div>
       </main>
-
-      <div className="pickerbar">
-        <div className="sel-info"><strong>{selected.length}</strong>/10 선택됨</div>
-        <div className="sel-actions">
-          <button className="ghost" onClick={() => setSelected([])}>모두 해제</button>
-          <button className="primary" disabled={selected.length === 0} onClick={recommendSimilar}>추천</button>
-        </div>
-      </div>
     </div>
   )
 }

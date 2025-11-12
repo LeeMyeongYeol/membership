@@ -20,7 +20,8 @@ def health_check():
         "message": "Movie Recommendation API",
         "version": "2.0",
         "endpoints": {
-            "analyze": "/api/analyze"
+            "analyze": "/api/analyze",
+            "discover": "/api/discover"
         },
         "config": {
             "tmdb_configured": bool(Config.TMDB_API_KEY),
@@ -141,6 +142,47 @@ def analyze():
         }
         
         return jsonify(response)
+    
+    except Exception as e:
+        return jsonify({"error": f"서버 오류: {str(e)}"}), 500
+
+
+@api_bp.route('/api/discover', methods=['POST'])
+def discover():
+    """
+    장르, 테마 기반 영화 발견 API
+    
+    Request Body:
+        genres: List[str] - 장르 리스트 (예: ["Action", "Comedy"])
+        themes: List[str] - 테마 리스트 (예: ["Popular", "Top Rated"])
+        language: str - 언어 코드 (기본값: ko-KR)
+        page: int - 페이지 번호 (기본값: 1)
+    
+    Response:
+        items: 영화 리스트
+        total: 총 영화 수
+        page: 현재 페이지
+    """
+    try:
+        data = request.get_json(force=True)
+        genres = data.get("genres", [])
+        themes = data.get("themes", [])
+        lang = data.get("language", "ko-KR")
+        page = data.get("page", 1)
+        
+        # TMDb discover API 호출
+        movies = tmdb_service.discover_movies(
+            genres=genres,
+            themes=themes,
+            lang=lang,
+            page=page
+        )
+        
+        return jsonify({
+            "items": movies,
+            "total": len(movies),
+            "page": page
+        })
     
     except Exception as e:
         return jsonify({"error": f"서버 오류: {str(e)}"}), 500
