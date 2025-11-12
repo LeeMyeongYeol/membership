@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # 1. 백엔드 API 서비스 (배포용)
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: movie-reco-api-prod
+    env_file:
+      - .env
+    # --- 제거 ---
+    # ports: (Nginx 프록시를 통해서만 통신하므로 외부에 노출 안 함)
+    # volumes: (코드가 Dockerfile에서 COPY되어 이미지에 포함됨)
+    # ------------
+    restart: always
+    networks:
+      - movie-network
+
+  # 2. 프론트엔드 서비스 (Nginx 배포용)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: movie-reco-frontend-prod
+    ports:
+      # ★ 변경: 호스트의 80번 포트(HTTP)를 컨테이너의 80번(Nginx)과 연결
+      - "80:80"
+    depends_on:
+      - api
+    restart: always
+    networks:
+      - movie-network
+
+networks:
+  movie-network:
+    driver: bridge
