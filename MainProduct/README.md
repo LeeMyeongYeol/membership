@@ -50,7 +50,7 @@ OMDB_API_KEY=your_omdb_api_key
 
 ```bash
 # Docker Compose로 빌드 및 실행
-docker-compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml up -d --build
 
 # 백그라운드 실행
 docker compose up -d
