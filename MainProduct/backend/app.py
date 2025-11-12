@@ -15,9 +15,11 @@ def create_app():
     app.config.from_object(Config)
     
     # CORS 설정 (React 프론트엔드와 통신)
+    # 릴리즈 환경에서는 Nginx 프록시를 통해 같은 origin에서 요청이 오므로
+    # 모든 origin을 허용하거나, 프록시 헤더를 신뢰하도록 설정
     CORS(app, resources={
         r"/api/*": {
-            "origins": ["http://localhost:3000", "http://localhost:5173"],
+            "origins": "*",  # 모든 origin 허용 (Nginx 프록시 환경)
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type"]
         }
