@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import './PopularMovies.css'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_URL || ''
 const TMDB_API_KEY_FRONT = 'ddd654eb8622a67e04f93f613653426d'
 const POSTER_BASE = 'https://image.tmdb.org/t/p/w500'
 
