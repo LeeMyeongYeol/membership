@@ -7,8 +7,8 @@ const TMDB_API_KEY_FRONT = 'ddd654eb8622a67e04f93f613653426d'
 const POSTER_BASE = 'https://image.tmdb.org/t/p/w500'
 
 const GENRES = ["Action (액션)", "Adventure (모험)", "Animation (애니메이션)", "Comedy (코미디)", "Crime (범죄)", "Drama (드라마)", "Fantasy (판타지)", "Historical (사극/역사)", "Horror (공포)", "Musical (뮤지컬)", "Mystery (미스터리)", "Romance (로맨스)", "Sci-Fi (SF / 공상과학)", "Thriller (스릴러)", "War (전쟁)", "Western (서부극)", "Documentary (다큐멘터리)", "Family (가족)", "Biography (전기)", "Sport (스포츠)"]
-const REGIONS = ["한국영화", "해외영화", "일본영화", "중국영화", "프랑스영화", "OTT 전용 영화"]
-const THEMES = ["Now Playing (현재 상영작)", "Upcoming (개봉 예정작)", "Top Rated (평점 높은 순)", "Popular (인기순)", "Classic (고전 명작)", "Indie (독립영화)", "Short Film (단편영화)", "LGBTQ+", "Noir / Neo-noir", "Superhero (히어로)", "Time Travel / Space / Cyberpunk", "Zombie / Monster / Disaster"]
+const REGIONS = ["한국영화", "해외영화", "일본영화", "중국영화", "프랑스영화"]
+const THEMES = ["Now Playing (현재 상영작)", "Upcoming (개봉 예정작)", "Top Rated (평점 높은 순)", "Popular (인기순)", "Classic (고전 명작)"]
 
 const REGION_LANG = { "한국영화": "ko", "해외영화": "en", "일본영화": "ja", "중국영화": "zh", "프랑스영화": "fr" }
 

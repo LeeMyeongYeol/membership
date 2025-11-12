@@ -4,6 +4,7 @@ TMDb API 호출 서비스
 from typing import Dict, Any, List
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 
 import requests
 from config import Config
@@ -33,19 +34,47 @@ GENRE_MAP = {
     "Sport": 18, "스포츠": 18
 }
 
-# 테마 → TMDb 파라미터 매핑
-THEME_MAP = {
-    "Now Playing": {"endpoint": "now_playing"},
-    "현재 상영작": {"endpoint": "now_playing"},
-    "Upcoming": {"endpoint": "upcoming"},
-    "개봉 예정작": {"endpoint": "upcoming"},
-    "Top Rated": {"endpoint": "top_rated"},
-    "평점 높은 순": {"endpoint": "top_rated"},
-    "Popular": {"endpoint": "popular"},
-    "인기순": {"endpoint": "popular"},
-    "Classic": {"sort_by": "vote_average.desc", "vote_count.gte": "1000", "primary_release_date.lte": "2000-12-31"},
-    "고전 명작": {"sort_by": "vote_average.desc", "vote_count.gte": "1000", "primary_release_date.lte": "2000-12-31"},
-}
+
+def get_date_range_for_theme(theme: str) -> Dict[str, str]:
+    """테마에 따른 날짜 범위 반환"""
+    today = datetime.now()
+    
+    if theme in ["Now Playing", "현재 상영작"]:
+        # 최근 2개월 ~ 현재
+        start = (today - timedelta(days=60)).strftime("%Y-%m-%d")
+        end = today.strftime("%Y-%m-%d")
+        return {
+            "primary_release_date.gte": start,
+            "primary_release_date.lte": end
+        }
+    
+    elif theme in ["Upcoming", "개봉 예정작"]:
+        # 현재 ~ 3개월 후
+        end = (today + timedelta(days=90)).strftime("%Y-%m-%d")
+        return {
+            "primary_release_date.gte": today.strftime("%Y-%m-%d"),
+            "primary_release_date.lte": end
+        }
+    
+    elif theme in ["Top Rated", "평점 높은 순"]:
+        return {
+            "sort_by": "vote_average.desc",
+            "vote_count.gte": "1000"
+        }
+    
+    elif theme in ["Popular", "인기순"]:
+        return {
+            "sort_by": "popularity.desc"
+        }
+    
+    elif theme in ["Classic", "고전 명작"]:
+        return {
+            "sort_by": "vote_average.desc",
+            "vote_count.gte": "1000",
+            "primary_release_date.lte": "2000-12-31"
+        }
+    
+    return {}
 
 
 class TMDbService:
@@ -226,6 +255,14 @@ class TMDbService:
         """
         print(f"[DEBUG] discover_movies called with genres={genres}, themes={themes}, lang={lang}, page={page}")
         
+        # 기본 파라미터 (항상 discover 엔드포인트 사용)
+        params = {
+            "language": lang,
+            "page": page,
+            "include_adult": False,
+            "sort_by": "popularity.desc"
+        }
+        
         # 장르 ID 변환
         genre_ids = []
         if genres:
@@ -236,38 +273,23 @@ class TMDbService:
                     genre_ids.append(GENRE_MAP[genre_clean])
                     print(f"[DEBUG] Genre '{genre_clean}' mapped to ID {GENRE_MAP[genre_clean]}")
         
-        # 테마 처리
-        endpoint = "discover/movie"
-        params = {
-            "language": lang,
-            "page": page,
-            "include_adult": False,
-            "sort_by": "popularity.desc"
-        }
-        
-        # 특별한 엔드포인트가 있는 테마 처리
-        if themes:
-            for theme in themes:
-                theme_clean = theme.split("(")[0].strip()
-                if theme_clean in THEME_MAP:
-                    theme_config = THEME_MAP[theme_clean]
-                    if "endpoint" in theme_config:
-                        endpoint = f"movie/{theme_config['endpoint']}"
-                        print(f"[DEBUG] Theme '{theme_clean}' changed endpoint to '{endpoint}'")
-                        break
-                    else:
-                        params.update(theme_config)
-                        print(f"[DEBUG] Theme '{theme_clean}' added params: {theme_config}")
-        
         # 장르 ID 추가
         if genre_ids:
             params["with_genres"] = ",".join(map(str, genre_ids))
         
-        print(f"[DEBUG] Final endpoint: {endpoint}, params: {params}")
+        # 테마 파라미터 추가
+        if themes:
+            for theme in themes:
+                theme_clean = theme.split("(")[0].strip()
+                theme_params = get_date_range_for_theme(theme_clean)
+                params.update(theme_params)
+                print(f"[DEBUG] Theme '{theme_clean}' added params: {theme_params}")
         
-        # API 호출
+        print(f"[DEBUG] Final params: {params}")
+        
+        # API 호출 (항상 discover 엔드포인트)
         try:
-            data = self._get(f"/{endpoint}", params)
+            data = self._get("/discover/movie", params)
             results = data.get("results", [])
             print(f"[DEBUG] Got {len(results)} results from TMDb")
         except Exception as e:
