@@ -4,9 +4,77 @@ TMDb API 호출 서비스
 from typing import Dict, Any, List
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 
 import requests
 from config import Config
+
+
+# TMDb 장르 ID 매핑
+GENRE_MAP = {
+    "Action": 28, "액션": 28,
+    "Adventure": 12, "모험": 12,
+    "Animation": 16, "애니메이션": 16,
+    "Comedy": 35, "코미디": 35,
+    "Crime": 80, "범죄": 80,
+    "Drama": 18, "드라마": 18,
+    "Fantasy": 14, "판타지": 14,
+    "Historical": 36, "사극": 36, "역사": 36,
+    "Horror": 27, "공포": 27,
+    "Musical": 10402, "뮤지컬": 10402,
+    "Mystery": 9648, "미스터리": 9648,
+    "Romance": 10749, "로맨스": 10749,
+    "Sci-Fi": 878, "SF": 878, "공상과학": 878,
+    "Thriller": 53, "스릴러": 53,
+    "War": 10752, "전쟁": 10752,
+    "Western": 37, "서부극": 37,
+    "Documentary": 99, "다큐멘터리": 99,
+    "Family": 10751, "가족": 10751,
+    "Biography": 18, "전기": 18,
+    "Sport": 18, "스포츠": 18
+}
+
+
+def get_date_range_for_theme(theme: str) -> Dict[str, str]:
+    """테마에 따른 날짜 범위 반환"""
+    today = datetime.now()
+    
+    if theme in ["Now Playing", "현재 상영작"]:
+        # 최근 2개월 ~ 현재
+        start = (today - timedelta(days=60)).strftime("%Y-%m-%d")
+        end = today.strftime("%Y-%m-%d")
+        return {
+            "primary_release_date.gte": start,
+            "primary_release_date.lte": end
+        }
+    
+    elif theme in ["Upcoming", "개봉 예정작"]:
+        # 현재 ~ 3개월 후
+        end = (today + timedelta(days=90)).strftime("%Y-%m-%d")
+        return {
+            "primary_release_date.gte": today.strftime("%Y-%m-%d"),
+            "primary_release_date.lte": end
+        }
+    
+    elif theme in ["Top Rated", "평점 높은 순"]:
+        return {
+            "sort_by": "vote_average.desc",
+            "vote_count.gte": "1000"
+        }
+    
+    elif theme in ["Popular", "인기순"]:
+        return {
+            "sort_by": "popularity.desc"
+        }
+    
+    elif theme in ["Classic", "고전 명작"]:
+        return {
+            "sort_by": "vote_average.desc",
+            "vote_count.gte": "1000",
+            "primary_release_date.lte": "2000-12-31"
+        }
+    
+    return {}
 
 
 class TMDbService:
@@ -165,6 +233,87 @@ class TMDbService:
                     results.append(profile)
         
         return results
+    
+    def discover_movies(
+        self,
+        genres: List[str] = None,
+        themes: List[str] = None,
+        lang: str = "ko-KR",
+        page: int = 1
+    ) -> List[Dict[str, Any]]:
+        """
+        장르, 테마 등으로 영화 발견
+        
+        Args:
+            genres: 장르 리스트 (예: ["Action", "Comedy"])
+            themes: 테마 리스트 (예: ["Popular", "Top Rated"])
+            lang: 언어 코드
+            page: 페이지 번호
+            
+        Returns:
+            영화 리스트
+        """
+        print(f"[DEBUG] discover_movies called with genres={genres}, themes={themes}, lang={lang}, page={page}")
+        
+        # 기본 파라미터 (항상 discover 엔드포인트 사용)
+        params = {
+            "language": lang,
+            "page": page,
+            "include_adult": False,
+            "sort_by": "popularity.desc"
+        }
+        
+        # 장르 ID 변환
+        genre_ids = []
+        if genres:
+            for genre in genres:
+                # 괄호 안의 한글 제거 (예: "Action (액션)" -> "Action")
+                genre_clean = genre.split("(")[0].strip()
+                if genre_clean in GENRE_MAP:
+                    genre_ids.append(GENRE_MAP[genre_clean])
+                    print(f"[DEBUG] Genre '{genre_clean}' mapped to ID {GENRE_MAP[genre_clean]}")
+        
+        # 장르 ID 추가
+        if genre_ids:
+            params["with_genres"] = ",".join(map(str, genre_ids))
+        
+        # 테마 파라미터 추가
+        if themes:
+            for theme in themes:
+                theme_clean = theme.split("(")[0].strip()
+                theme_params = get_date_range_for_theme(theme_clean)
+                params.update(theme_params)
+                print(f"[DEBUG] Theme '{theme_clean}' added params: {theme_params}")
+        
+        print(f"[DEBUG] Final params: {params}")
+        
+        # API 호출 (항상 discover 엔드포인트)
+        try:
+            data = self._get("/discover/movie", params)
+            results = data.get("results", [])
+            print(f"[DEBUG] Got {len(results)} results from TMDb")
+        except Exception as e:
+            print(f"[ERROR] TMDb API call failed: {e}")
+            raise
+        
+        # 결과 정규화
+        movies = []
+        for movie in results:
+            movies.append({
+                "id": movie.get("id"),
+                "title": movie.get("title") or movie.get("original_title"),
+                "year": (movie.get("release_date") or "")[:4],
+                "poster": (
+                    self.image_base_url + movie.get("poster_path")
+                    if movie.get("poster_path") else None
+                ),
+                "source": "TMDb",
+                "vote_average": movie.get("vote_average"),
+                "vote_count": movie.get("vote_count"),
+                "overview": movie.get("overview") or ""
+            })
+        
+        return movies
 
 
 # 싱글톤 인스턴스
