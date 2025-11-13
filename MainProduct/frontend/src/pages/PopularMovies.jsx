@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
+import MovieDetailModal from '../components/MovieDetailModal'
 import './PopularMovies.css'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -21,6 +22,8 @@ function PopularMovies() {
   const [noMore, setNoMore] = useState(false)
   const [status, setStatus] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [selectedMovie, setSelectedMovie] = useState(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   const sentinelRef = useRef(null)
   const queryInputRef = useRef(null)
@@ -178,6 +181,28 @@ function PopularMovies() {
     if (closeAfter) setPanelOpen(false)
   }
 
+  // 영화 클릭 핸들러
+  const handleMovieClick = async (movie) => {
+    // 필요한 데이터 보강
+    const enrichedMovie = {
+      ...movie,
+      id: movie.id,
+      title: movie.title,
+      poster: movie.poster,
+      year: movie.year,
+      // MainAnalysis와 호환성을 위해 release_date 추가
+      release_date: movie.year ? `${movie.year}-01-01` : null,
+      // 기본값 설정
+      genres: movie.genres || [],
+      overview: movie.overview || '',
+      vote_average: movie.vote_average || 0,
+      vote_count: movie.vote_count || 0,
+      runtime: movie.runtime || null
+    }
+    setSelectedMovie(enrichedMovie)
+    setIsModalOpen(true)
+  }
+
   // 초기 로드
   useEffect(() => {
     loadMovies(1, false)
@@ -304,7 +329,7 @@ function PopularMovies() {
 
         <div className="movie-grid">
           {currentItems.map((m, idx) => (
-            <div key={`${m.id}-${idx}`} className="card">
+            <div key={`${m.id}-${idx}`} className="card" onClick={() => handleMovieClick(m)} style={{ cursor: 'pointer' }}>
               <img className="thumb" src={m.poster || ''} alt={m.title} />
               <div className="meta">
                 <div className="title">
@@ -318,6 +343,12 @@ function PopularMovies() {
         </div>
         <div ref={sentinelRef} className="sentinel"></div>
       </main>
+
+      <MovieDetailModal 
+        movie={selectedMovie}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
     </div>
   )
 }

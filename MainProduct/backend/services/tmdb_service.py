@@ -314,6 +314,101 @@ class TMDbService:
             })
         
         return movies
+    
+    @lru_cache(maxsize=2048)
+    def get_streaming_providers(self, movie_id: int, region: str = "KR") -> Dict[str, Any]:
+        """
+        영화의 스트리밍 제공 정보 조회 (OTT 플랫폼)
+        
+        Args:
+            movie_id: TMDb 영화 ID
+            region: 국가 코드 (기본값: KR - 한국)
+                    US(미국), JP(일본), GB(영국) 등
+            
+        Returns:
+            스트리밍 제공 정보 딕셔너리
+            {
+                "movie_id": 123,
+                "region": "KR",
+                "link": "https://www.themoviedb.org/movie/123/watch",
+                "flatrate": [{"provider_name": "Netflix", "logo_path": "/...", "provider_id": 8}],
+                "rent": [{"provider_name": "Google Play", "logo_path": "/...", "provider_id": 3}],
+                "buy": [{"provider_name": "Apple iTunes", "logo_path": "/...", "provider_id": 2}],
+                "free": [{"provider_name": "Watcha", "logo_path": "/...", "provider_id": 97}],
+                "ads": [{"provider_name": "Tubi", "logo_path": "/...", "provider_id": 283}]
+            }
+        """
+        try:
+            data = self._get(f"/movie/{movie_id}/watch/providers", {})
+            results = data.get("results", {})
+            region_data = results.get(region, {})
+            
+            # 로고 URL 생성 함수
+            def format_providers(providers):
+                if not providers:
+                    return []
+                return [
+                    {
+                        "provider_id": p.get("provider_id"),
+                        "provider_name": p.get("provider_name"),
+                        "logo_path": f"https://image.tmdb.org/t/p/original{p.get('logo_path')}" if p.get("logo_path") else None,
+                        "display_priority": p.get("display_priority", 999)
+                    }
+                    for p in providers
+                ]
+            
+            streaming_info = {
+                "movie_id": movie_id,
+                "region": region,
+                "link": region_data.get("link"),  # TMDb 상세 페이지 링크
+                "flatrate": format_providers(region_data.get("flatrate")),  # 구독형 (Netflix, Disney+ 등)
+                "rent": format_providers(region_data.get("rent")),  # 대여
+                "buy": format_providers(region_data.get("buy")),   # 구매
+                "free": format_providers(region_data.get("free")),  # 무료
+                "ads": format_providers(region_data.get("ads"))    # 광고형
+            }
+            
+            return streaming_info
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to get streaming providers for movie {movie_id}: {e}")
+            return {
+                "movie_id": movie_id,
+                "region": region,
+                "link": None,
+                "flatrate": [],
+                "rent": [],
+                "buy": [],
+                "free": [],
+                "ads": [],
+                "error": str(e)
+            }
+    
+    def get_bulk_streaming_providers(
+        self, 
+        movie_ids: List[int], 
+        region: str = "KR"
+    ) -> List[Dict[str, Any]]:
+        """
+        여러 영화의 스트리밍 정보를 병렬로 조회
+        
+        Args:
+            movie_ids: 영화 ID 리스트
+            region: 국가 코드
+            
+        Returns:
+            스트리밍 정보 리스트
+        """
+        def fetch_streaming(movie_id: int):
+            try:
+                return self.get_streaming_providers(movie_id, region)
+            except Exception:
+                return None
+        
+        with ThreadPoolExecutor(max_workers=Config.MAX_WORKERS) as executor:
+            results = list(executor.map(fetch_streaming, movie_ids))
+        
+        return [r for r in results if r is not None]
 
 
 # 싱글톤 인스턴스

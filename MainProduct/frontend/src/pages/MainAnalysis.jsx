@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import axios from 'axios'
+import MovieDetailModal from '../components/MovieDetailModal'
 import './MainAnalysis.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -10,6 +11,8 @@ function MainAnalysis() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [selectedMovie, setSelectedMovie] = useState(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   const handleAnalyze = async () => {
     setError('')
@@ -67,10 +70,15 @@ function MainAnalysis() {
     )
   }
 
+  const handleMovieClick = (item) => {
+    setSelectedMovie(item)
+    setIsModalOpen(true)
+  }
+
   const renderMovieCard = (item) => {
     const poster = item.poster
-      ? <img className="poster" loading="lazy" src={item.poster} alt={item.title} />
-      : <div style={{ height: '180px', background: '#0b1430' }}></div>
+      ? <img className="poster" loading="lazy" src={item.poster} alt={item.title} onClick={() => handleMovieClick(item)} style={{ cursor: 'pointer' }} />
+      : <div onClick={() => handleMovieClick(item)} style={{ height: '180px', background: '#0b1430', cursor: 'pointer' }}></div>
 
     const genres = (item.genres || []).map((g, idx) => (
       <span key={idx} className="badge">{g}</span>
@@ -167,6 +175,12 @@ function MainAnalysis() {
       </div>
 
       <footer className="page-footer">© TF‑IDF Recommender • TMDb/OMDb 데이터를 사용합니다.</footer>
+
+      <MovieDetailModal 
+        movie={selectedMovie}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
     </div>
   )
 }
