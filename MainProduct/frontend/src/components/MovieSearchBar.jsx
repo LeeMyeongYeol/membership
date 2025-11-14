@@ -1,65 +1,65 @@
-import { useState, useEffect, useRef } from 'react'
-import axios from 'axios'
-import './MovieSearchBar.css'
+import { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
+import './MovieSearchBar.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 function MovieSearchBar({ onSelectMovie, language }) {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [suggestions, setSuggestions] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const searchRef = useRef(null)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
-        setShowSuggestions(false)
+        setShowSuggestions(false);
       }
-    }
+    };
 
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const delayTimer = setTimeout(() => {
       if (searchQuery.trim().length > 0) {
-        searchMovies(searchQuery)
+        searchMovies(searchQuery);
       } else {
-        setSuggestions([])
-        setShowSuggestions(false)
+        setSuggestions([]);
+        setShowSuggestions(false);
       }
-    }, 300)
+    }, 300);
 
-    return () => clearTimeout(delayTimer)
-  }, [searchQuery, language])
+    return () => clearTimeout(delayTimer);
+  }, [searchQuery, language]);
 
   const searchMovies = async (query) => {
-    setLoading(true)
+    setLoading(true);
     try {
       const response = await axios.get(`${API_URL}/api/search`, {
         params: {
           q: query,
-          language: language
-        }
-      })
-      setSuggestions((response.data.results || []).slice(0, 5))
-      setShowSuggestions(true)
+          language: language,
+        },
+      });
+      setSuggestions((response.data.results || []).slice(0, 5));
+      setShowSuggestions(true);
     } catch (err) {
-      console.error('검색 오류:', err)
-      setSuggestions([])
+      console.error('검색 오류:', err);
+      setSuggestions([]);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSelectMovie = (movie) => {
-    onSelectMovie(movie.title)
-    setSearchQuery('')
-    setSuggestions([])
-    setShowSuggestions(false)
-  }
+    onSelectMovie(movie.title);
+    setSearchQuery('');
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
 
   return (
     <div className="movie-search-bar" ref={searchRef}>
@@ -82,17 +82,21 @@ function MovieSearchBar({ onSelectMovie, language }) {
             >
               <div className="suggestion-title">
                 {movie.title}
-                {movie.year && <span className="suggestion-year"> ({movie.year})</span>}
+                {movie.year && (
+                  <span className="suggestion-year"> ({movie.year})</span>
+                )}
               </div>
               {movie.original_title && movie.original_title !== movie.title && (
-                <div className="suggestion-original">{movie.original_title}</div>
+                <div className="suggestion-original">
+                  {movie.original_title}
+                </div>
               )}
             </div>
           ))}
         </div>
       )}
     </div>
-  )
+  );
 }
 
-export default MovieSearchBar
+export default MovieSearchBar;
