@@ -21,7 +21,9 @@ def health_check():
         "version": "2.0",
         "endpoints": {
             "analyze": "/api/analyze",
-            "discover": "/api/discover"
+            "discover": "/api/discover",
+            "streaming_single": "/api/streaming/<movie_id>",
+            "streaming_bulk": "/api/streaming/bulk"
         },
         "config": {
             "tmdb_configured": bool(Config.TMDB_API_KEY),
@@ -145,6 +147,162 @@ def analyze():
     
     except Exception as e:
         return jsonify({"error": f"서버 오류: {str(e)}"}), 500
+
+
+@api_bp.route('/api/streaming/<int:movie_id>', methods=['GET'])
+def get_streaming(movie_id: int):
+    """
+    특정 영화의 스트리밍 제공 정보 조회 API
+    
+    Path Parameters:
+        movie_id: int - TMDb 영화 ID
+    
+    Query Parameters:
+        region: str - 국가 코드 (기본값: KR)
+                     KR(한국), US(미국), JP(일본), GB(영국), CN(중국) 등
+    
+    Response:
+        movie_id: 영화 ID
+        region: 국가 코드
+        link: TMDb Watch 페이지 URL
+        flatrate: 구독형 OTT 리스트 (Netflix, Disney+ 등)
+        rent: 대여 가능 플랫폼 리스트
+        buy: 구매 가능 플랫폼 리스트
+        free: 무료 스트리밍 플랫폼 리스트
+        ads: 광고 포함 무료 플랫폼 리스트
+    
+    Example:
+        GET /api/streaming/550?region=KR
+        GET /api/streaming/550?region=US
+    """
+    try:
+        region = request.args.get('region', 'KR').upper()
+        
+        streaming_info = tmdb_service.get_streaming_providers(movie_id, region)
+        
+        # 결과가 비어있는지 확인
+        has_providers = any([
+            streaming_info.get('flatrate'),
+            streaming_info.get('rent'),
+            streaming_info.get('buy'),
+            streaming_info.get('free'),
+            streaming_info.get('ads')
+        ])
+        
+        if not has_providers and not streaming_info.get('error'):
+            return jsonify({
+                **streaming_info,
+                "message": f"{region} 지역에서 사용 가능한 스트리밍 정보가 없습니다."
+            })
+        
+        return jsonify(streaming_info)
+    
+    except Exception as e:
+        return jsonify({
+            "error": f"스트리밍 정보 조회 실패: {str(e)}"
+        }), 500
+
+
+@api_bp.route('/api/streaming/bulk', methods=['POST'])
+def get_streaming_bulk():
+    """
+    여러 영화의 스트리밍 제공 정보를 한 번에 조회하는 API
+    
+    Request Body:
+        movie_ids: List[int] - 영화 ID 리스트
+        region: str - 국가 코드 (기본값: KR)
+    
+    Response:
+        items: 스트리밍 정보 리스트
+        total: 총 개수
+        region: 조회한 국가 코드
+    
+    Example:
+        POST /api/streaming/bulk
+        Body: {
+            "movie_ids": [550, 680, 155],
+            "region": "KR"
+        }
+    """
+    try:
+        data = request.get_json(force=True)
+        movie_ids = data.get('movie_ids', [])
+        region = data.get('region', 'KR').upper()
+        
+        if not movie_ids:
+            return jsonify({"error": "movie_ids는 필수 필드입니다."}), 400
+        
+        if not isinstance(movie_ids, list):
+            return jsonify({"error": "movie_ids는 리스트여야 합니다."}), 400
+        
+        # 최대 50개로 제한
+        if len(movie_ids) > 50:
+            movie_ids = movie_ids[:50]
+        
+        streaming_infos = tmdb_service.get_bulk_streaming_providers(movie_ids, region)
+        
+        return jsonify({
+            "items": streaming_infos,
+            "total": len(streaming_infos),
+            "region": region
+        })
+    
+    except Exception as e:
+        return jsonify({
+            "error": f"대량 스트리밍 정보 조회 실패: {str(e)}"
+        }), 500
+
+
+@api_bp.route('/api/search', methods=['GET'])
+def search_movies():
+    """
+    영화 제목으로 검색하는 API (자동완성용)
+    
+    Query Parameters:
+        q: str - 검색어
+        language: str - 언어 코드 (기본값: ko-KR)
+    
+    Response:
+        results: 영화 리스트 (최대 10개)
+    
+    Example:
+        GET /api/search?q=기생충&language=ko-KR
+    """
+    try:
+        query = request.args.get('q', '').strip()
+        lang = request.args.get('language', 'ko-KR')
+        
+        if not query:
+            return jsonify({"results": []})
+        
+        if len(query) < 1:
+            return jsonify({"results": []})
+        
+        # TMDb 검색 API 호출 (여러 결과 반환)
+        search_results = tmdb_service.search_movies(query, lang, limit=10)
+        
+        # 검색 결과가 없으면 빈 배열 반환
+        if not search_results:
+            return jsonify({"results": []})
+        
+        # 결과 형식 변환
+        results = [
+            {
+                "id": movie.get("id"),
+                "title": movie.get("title") or movie.get("original_title"),
+                "original_title": movie.get("original_title"),
+                "release_date": movie.get("release_date"),
+                "year": (movie.get("release_date") or "")[:4],
+                "poster_path": movie.get("poster_path"),
+                "overview": movie.get("overview")
+            }
+            for movie in search_results
+        ]
+        
+        return jsonify({"results": results})
+    
+    except Exception as e:
+        return jsonify({"error": f"검색 실패: {str(e)}"}), 500
 
 
 @api_bp.route('/api/discover', methods=['POST'])
