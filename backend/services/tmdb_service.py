@@ -144,6 +144,49 @@ class TMDbService:
         best_match = sorted(results, key=lambda x: x["_popularity"], reverse=True)[0]
         return best_match
     
+    def search_movies(self, title: str, lang: str = "ko-KR", limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        영화 제목으로 검색하여 여러 결과 반환 (자동완성용)
+        
+        Args:
+            title: 검색할 영화 제목
+            lang: 언어 코드 (기본값: ko-KR)
+            limit: 최대 결과 개수 (기본값: 10)
+            
+        Returns:
+            영화 정보 리스트
+        """
+        if not title.strip():
+            return []
+        
+        # 한국어로 검색
+        data = self._get("/search/movie", {
+            "query": title,
+            "language": lang,
+            "include_adult": False
+        })
+        results = data.get("results", [])
+        
+        # 결과가 없으면 영어로 재시도
+        if not results:
+            data = self._get("/search/movie", {
+                "query": title,
+                "language": "en-US",
+                "include_adult": False
+            })
+            results = data.get("results", [])
+        
+        # 인기도와 제목 유사도로 정렬
+        title_lower = title.lower()
+        for movie in results:
+            movie["_popularity"] = movie.get("popularity", 0)
+            name = (movie.get("title") or movie.get("original_title") or "").lower()
+            if title_lower in name:
+                movie["_popularity"] += 100
+        
+        sorted_results = sorted(results, key=lambda x: x["_popularity"], reverse=True)
+        return sorted_results[:limit]
+    
     @lru_cache(maxsize=8192)
     def get_movie_details(self, movie_id: int, lang: str = "ko-KR") -> Dict[str, Any]:
         """

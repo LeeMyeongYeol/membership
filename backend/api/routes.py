@@ -253,6 +253,58 @@ def get_streaming_bulk():
         }), 500
 
 
+@api_bp.route('/api/search', methods=['GET'])
+def search_movies():
+    """
+    영화 제목으로 검색하는 API (자동완성용)
+    
+    Query Parameters:
+        q: str - 검색어
+        language: str - 언어 코드 (기본값: ko-KR)
+    
+    Response:
+        results: 영화 리스트 (최대 10개)
+    
+    Example:
+        GET /api/search?q=기생충&language=ko-KR
+    """
+    try:
+        query = request.args.get('q', '').strip()
+        lang = request.args.get('language', 'ko-KR')
+        
+        if not query:
+            return jsonify({"results": []})
+        
+        if len(query) < 1:
+            return jsonify({"results": []})
+        
+        # TMDb 검색 API 호출 (여러 결과 반환)
+        search_results = tmdb_service.search_movies(query, lang, limit=10)
+        
+        # 검색 결과가 없으면 빈 배열 반환
+        if not search_results:
+            return jsonify({"results": []})
+        
+        # 결과 형식 변환
+        results = [
+            {
+                "id": movie.get("id"),
+                "title": movie.get("title") or movie.get("original_title"),
+                "original_title": movie.get("original_title"),
+                "release_date": movie.get("release_date"),
+                "year": (movie.get("release_date") or "")[:4],
+                "poster_path": movie.get("poster_path"),
+                "overview": movie.get("overview")
+            }
+            for movie in search_results
+        ]
+        
+        return jsonify({"results": results})
+    
+    except Exception as e:
+        return jsonify({"error": f"검색 실패: {str(e)}"}), 500
+
+
 @api_bp.route('/api/discover', methods=['POST'])
 def discover():
     """
