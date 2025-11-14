@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import MovieDetailModal from '../components/MovieDetailModal';
 import './PopularMovies.css';
+import movieFinderLogo from '../assets/logo.png';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 const TMDB_API_KEY_FRONT = 'ddd654eb8622a67e04f93f613653426d';
@@ -315,8 +316,11 @@ function PopularMovies() {
       <header className="movie-header">
         <div className="hwrap">
           <div className="brand">
-            <div className="logo">🎬</div>
-            <strong>Movie Finder</strong>
+            <img
+              src={movieFinderLogo}
+              alt="Movie Finder Logo"
+              className="app-logo"
+            />
           </div>
           <div className="head-actions">
             <button
