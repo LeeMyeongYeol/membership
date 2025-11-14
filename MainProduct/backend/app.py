@@ -5,6 +5,7 @@ from flask import Flask
 from flask_cors import CORS
 from config import Config
 from api import api_bp
+from database import init_db
 
 
 def create_app():
@@ -17,14 +18,22 @@ def create_app():
     # CORS 설정 (React 프론트엔드와 통신)
     CORS(app, resources={
         r"/api/*": {
-            "origins": ["http://localhost:3000", "http://localhost:5173"],
+            "origins": "*",
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type"]
+            "allow_headers": ["Content-Type", "Authorization"]
         }
     })
     
     # Blueprint 등록
     app.register_blueprint(api_bp)
+    
+    # 데이터베이스 초기화
+    with app.app_context():
+        try:
+            init_db()
+            print("[성공] 데이터베이스 테이블이 초기화되었습니다.")
+        except Exception as e:
+            print(f"[경고] 데이터베이스 초기화 실패: {e}")
     
     return app
 

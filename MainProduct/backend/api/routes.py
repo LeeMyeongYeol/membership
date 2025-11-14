@@ -3,11 +3,15 @@ Flask API 라우트
 """
 from typing import List
 from flask import Blueprint, request, jsonify
+from sqlalchemy.orm import Session
+from sqlalchemy import desc
 
 from config import Config
 from services.tmdb_service import tmdb_service
 from services.omdb_service import omdb_service
 from services.recommendation import recommendation_service
+from database import get_db, SessionLocal
+from models.review import Review
 
 api_bp = Blueprint('api', __name__)
 
@@ -23,7 +27,8 @@ def health_check():
             "analyze": "/api/analyze",
             "discover": "/api/discover",
             "streaming_single": "/api/streaming/<movie_id>",
-            "streaming_bulk": "/api/streaming/bulk"
+            "streaming_bulk": "/api/streaming/bulk",
+            "reviews": "/api/reviews/<movie_id>"
         },
         "config": {
             "tmdb_configured": bool(Config.TMDB_API_KEY),
@@ -34,21 +39,7 @@ def health_check():
 
 @api_bp.route('/api/analyze', methods=['POST'])
 def analyze():
-    """
-    영화 취향 분석 및 추천 API
-    
-    Request Body:
-        titles: List[str] - 좋아하는 영화 제목 리스트
-        language: str - 언어 코드 (기본값: ko-KR)
-    
-    Response:
-        favorites: 입력한 영화 정보
-        top_features: TF-IDF 상위 특징
-        top_genres: 상위 장르
-        top_directors: 상위 감독
-        top_actors: 상위 배우
-        recommendations: 추천 영화 리스트
-    """
+    """영화 취향 분석 및 추천 API"""
     try:
         data = request.get_json(force=True)
         titles: List[str] = data.get("titles", [])
@@ -82,12 +73,11 @@ def analyze():
         except Exception as e:
             return jsonify({"error": f"TF-IDF 분석 실패: {str(e)}"}), 500
         
-        # 4. 후보 영화 풀 생성 (추천/유사 영화들)
+        # 4. 후보 영화 풀 생성
         candidate_ids = []
         for profile in favorite_profiles:
             candidate_ids.extend(profile.get("candidate_ids") or [])
         
-        # 중복 제거 및 제한
         candidate_ids = list(dict.fromkeys(candidate_ids))[:Config.CANDIDATE_LIMIT]
         candidates = tmdb_service.get_bulk_movie_details(candidate_ids, lang)
         
@@ -100,12 +90,11 @@ def analyze():
             exclude_ids
         )
         
-        # 6. 상위 N개 선택 및 OMDb 정보 보강
+        # 6. 상위 N개 선택
         top_movies = scored_movies[:Config.TOP_N]
         recommendations = []
         
         for idx, (score, profile) in enumerate(top_movies, start=1):
-            # 상위 일부만 OMDb 정보 추가 (API 호출 절약)
             if idx <= Config.ENRICH_TOP:
                 profile = omdb_service.enrich_movie_profile(profile)
             
@@ -151,36 +140,12 @@ def analyze():
 
 @api_bp.route('/api/streaming/<int:movie_id>', methods=['GET'])
 def get_streaming(movie_id: int):
-    """
-    특정 영화의 스트리밍 제공 정보 조회 API
-    
-    Path Parameters:
-        movie_id: int - TMDb 영화 ID
-    
-    Query Parameters:
-        region: str - 국가 코드 (기본값: KR)
-                     KR(한국), US(미국), JP(일본), GB(영국), CN(중국) 등
-    
-    Response:
-        movie_id: 영화 ID
-        region: 국가 코드
-        link: TMDb Watch 페이지 URL
-        flatrate: 구독형 OTT 리스트 (Netflix, Disney+ 등)
-        rent: 대여 가능 플랫폼 리스트
-        buy: 구매 가능 플랫폼 리스트
-        free: 무료 스트리밍 플랫폼 리스트
-        ads: 광고 포함 무료 플랫폼 리스트
-    
-    Example:
-        GET /api/streaming/550?region=KR
-        GET /api/streaming/550?region=US
-    """
+    """특정 영화의 스트리밍 제공 정보 조회 API"""
     try:
         region = request.args.get('region', 'KR').upper()
         
         streaming_info = tmdb_service.get_streaming_providers(movie_id, region)
         
-        # 결과가 비어있는지 확인
         has_providers = any([
             streaming_info.get('flatrate'),
             streaming_info.get('rent'),
@@ -205,25 +170,7 @@ def get_streaming(movie_id: int):
 
 @api_bp.route('/api/streaming/bulk', methods=['POST'])
 def get_streaming_bulk():
-    """
-    여러 영화의 스트리밍 제공 정보를 한 번에 조회하는 API
-    
-    Request Body:
-        movie_ids: List[int] - 영화 ID 리스트
-        region: str - 국가 코드 (기본값: KR)
-    
-    Response:
-        items: 스트리밍 정보 리스트
-        total: 총 개수
-        region: 조회한 국가 코드
-    
-    Example:
-        POST /api/streaming/bulk
-        Body: {
-            "movie_ids": [550, 680, 155],
-            "region": "KR"
-        }
-    """
+    """여러 영화의 스트리밍 제공 정보를 한 번에 조회하는 API"""
     try:
         data = request.get_json(force=True)
         movie_ids = data.get('movie_ids', [])
@@ -235,7 +182,6 @@ def get_streaming_bulk():
         if not isinstance(movie_ids, list):
             return jsonify({"error": "movie_ids는 리스트여야 합니다."}), 400
         
-        # 최대 50개로 제한
         if len(movie_ids) > 50:
             movie_ids = movie_ids[:50]
         
@@ -253,22 +199,46 @@ def get_streaming_bulk():
         }), 500
 
 
+@api_bp.route('/api/search', methods=['GET'])
+def search_movies():
+    """영화 제목으로 검색하는 API (자동완성용)"""
+    try:
+        query = request.args.get('q', '').strip()
+        lang = request.args.get('language', 'ko-KR')
+        
+        if not query:
+            return jsonify({"results": []})
+        
+        if len(query) < 1:
+            return jsonify({"results": []})
+        
+        search_results = tmdb_service.search_movies(query, lang, limit=10)
+        
+        if not search_results:
+            return jsonify({"results": []})
+        
+        results = [
+            {
+                "id": movie.get("id"),
+                "title": movie.get("title") or movie.get("original_title"),
+                "original_title": movie.get("original_title"),
+                "release_date": movie.get("release_date"),
+                "year": (movie.get("release_date") or "")[:4],
+                "poster_path": movie.get("poster_path"),
+                "overview": movie.get("overview")
+            }
+            for movie in search_results
+        ]
+        
+        return jsonify({"results": results})
+    
+    except Exception as e:
+        return jsonify({"error": f"검색 실패: {str(e)}"}), 500
+
+
 @api_bp.route('/api/discover', methods=['POST'])
 def discover():
-    """
-    장르, 테마 기반 영화 발견 API
-    
-    Request Body:
-        genres: List[str] - 장르 리스트 (예: ["Action", "Comedy"])
-        themes: List[str] - 테마 리스트 (예: ["Popular", "Top Rated"])
-        language: str - 언어 코드 (기본값: ko-KR)
-        page: int - 페이지 번호 (기본값: 1)
-    
-    Response:
-        items: 영화 리스트
-        total: 총 영화 수
-        page: 현재 페이지
-    """
+    """장르, 테마 기반 영화 발견 API"""
     try:
         data = request.get_json(force=True)
         genres = data.get("genres", [])
@@ -276,7 +246,6 @@ def discover():
         lang = data.get("language", "ko-KR")
         page = data.get("page", 1)
         
-        # TMDb discover API 호출
         movies = tmdb_service.discover_movies(
             genres=genres,
             themes=themes,
@@ -292,3 +261,135 @@ def discover():
     
     except Exception as e:
         return jsonify({"error": f"서버 오류: {str(e)}"}), 500
+
+
+@api_bp.route('/api/reviews/<int:movie_id>', methods=['GET'])
+def get_reviews(movie_id: int):
+    """특정 영화의 리뷰 목록 조회 API"""
+    try:
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+        
+        db = SessionLocal()
+        try:
+            reviews = db.query(Review).filter(
+                Review.movie_id == movie_id
+            ).order_by(
+                desc(Review.created_at)
+            ).limit(limit).offset(offset).all()
+            
+            total = db.query(Review).filter(
+                Review.movie_id == movie_id
+            ).count()
+            
+            print(f"[DEBUG] 리뷰 조회 - movie_id: {movie_id}, total: {total}")
+            
+            return jsonify({
+                "reviews": [review.to_dict() for review in reviews],
+                "total": total,
+                "movie_id": movie_id
+            })
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[ERROR] 리뷰 조회 실패: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"리뷰 조회 실패: {str(e)}"}), 500
+
+
+@api_bp.route('/api/reviews', methods=['POST'])
+def create_review():
+    """리뷰 작성 API"""
+    try:
+        data = request.get_json(force=True)
+        print(f"[DEBUG] 리뷰 작성 요청: {data}")
+        
+        movie_id = data.get('movie_id')
+        author_name = data.get('author_name', '').strip()
+        content = data.get('content', '').strip()
+        rating = data.get('rating')
+        
+        if not movie_id:
+            return jsonify({"error": "movie_id는 필수입니다."}), 400
+        
+        if not author_name or len(author_name) > 50:
+            return jsonify({"error": "이름은 1-50자여야 합니다."}), 400
+        
+        if not content or len(content) > 1000:
+            return jsonify({"error": "내용은 1-1000자여야 합니다."}), 400
+        
+        if rating is None or not (0.0 <= rating <= 5.0):
+            return jsonify({"error": "별점은 0.0-5.0 사이여야 합니다."}), 400
+        
+        db = SessionLocal()
+        try:
+            review = Review(
+                movie_id=movie_id,
+                author_name=author_name,
+                content=content,
+                rating=rating
+            )
+            
+            db.add(review)
+            db.commit()
+            db.refresh(review)
+            
+            print(f"[SUCCESS] 리뷰 작성 완료: ID={review.id}")
+            
+            return jsonify({
+                "review": review.to_dict(),
+                "message": "리뷰가 성공적으로 작성되었습니다."
+            }), 201
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[ERROR] 리뷰 작성 실패: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"리뷰 작성 실패: {str(e)}"}), 500
+
+
+@api_bp.route('/api/reviews/<int:review_id>', methods=['DELETE'])
+def delete_review(review_id: int):
+    """리뷰 삭제 API"""
+    try:
+        db = SessionLocal()
+        try:
+            review = db.query(Review).filter(Review.id == review_id).first()
+            
+            if not review:
+                return jsonify({"error": "리뷰를 찾을 수 없습니다."}), 404
+            
+            db.delete(review)
+            db.commit()
+            
+            return jsonify({"message": "리뷰가 삭제되었습니다."})
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[ERROR] 리뷰 삭제 실패: {str(e)}")
+        return jsonify({"error": f"리뷰 삭제 실패: {str(e)}"}), 500
+
+
+@api_bp.route('/api/reviews/stats/<int:movie_id>', methods=['GET'])
+def get_review_stats(movie_id: int):
+    """영화의 리뷰 통계 조회 API"""
+    try:
+        db = SessionLocal()
+        try:
+            reviews = db.query(Review).filter(Review.movie_id == movie_id).all()
+            
+            total = len(reviews)
+            avg_rating = sum(r.rating for r in reviews) / total if total > 0 else 0.0
+            
+            return jsonify({
+                "total_reviews": total,
+                "average_rating": round(avg_rating, 2),
+                "movie_id": movie_id
+            })
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[ERROR] 통계 조회 실패: {str(e)}")
+        return jsonify({"error": f"통계 조회 실패: {str(e)}"}), 500
