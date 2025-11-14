@@ -1,26 +1,25 @@
 import { useState } from 'react'
 import axios from 'axios'
+import MovieDetailModal from '../components/MovieDetailModal'
+import MovieSearchBar from '../components/MovieSearchBar'
 import './MainAnalysis.css'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = import.meta.env.VITE_API_URL || ''
 
 function MainAnalysis() {
-  const [titles, setTitles] = useState('')
+  const [titles, setTitles] = useState([])
   const [language, setLanguage] = useState('ko-KR')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [selectedMovie, setSelectedMovie] = useState(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   const handleAnalyze = async () => {
     setError('')
     setResult(null)
 
-    const titleList = titles
-      .split('\n')
-      .map(t => t.trim())
-      .filter(Boolean)
-
-    if (titleList.length === 0) {
+    if (titles.length === 0) {
       setError('영화 제목을 한 개 이상 입력하세요.')
       return
     }
@@ -29,7 +28,7 @@ function MainAnalysis() {
 
     try {
       const response = await axios.post(`${API_URL}/api/analyze`, {
-        titles: titleList,
+        titles: titles,
         language: language
       })
       setResult(response.data)
@@ -67,10 +66,15 @@ function MainAnalysis() {
     )
   }
 
+  const handleMovieClick = (item) => {
+    setSelectedMovie(item)
+    setIsModalOpen(true)
+  }
+
   const renderMovieCard = (item) => {
     const poster = item.poster
-      ? <img className="poster" loading="lazy" src={item.poster} alt={item.title} />
-      : <div style={{ height: '180px', background: '#0b1430' }}></div>
+      ? <img className="poster" loading="lazy" src={item.poster} alt={item.title} onClick={() => handleMovieClick(item)} style={{ cursor: 'pointer' }} />
+      : <div onClick={() => handleMovieClick(item)} style={{ height: '180px', background: '#0b1430', cursor: 'pointer' }}></div>
 
     const genres = (item.genres || []).map((g, idx) => (
       <span key={idx} className="badge">{g}</span>
@@ -113,12 +117,34 @@ function MainAnalysis() {
         <div className="grid">
           <div className="card">
             <h3>1) 좋아하는 영화 제목 (한 줄에 1개)</h3>
-            <textarea
-              rows="10"
-              value={titles}
-              onChange={(e) => setTitles(e.target.value)}
-              placeholder="예) 기생충&#10;인셉션&#10;라라랜드&#10;어바웃 타임&#10;인터스텔라&#10;암살&#10;헤어질 결심"
+            <MovieSearchBar 
+              onSelectMovie={(title) => {
+                if (!titles.includes(title)) {
+                  setTitles(prev => [...prev, title])
+                }
+              }}
+              language={language}
             />
+            <div className="movie-list">
+              {titles.length === 0 ? (
+                <div className="hint" style={{ padding: '20px', textAlign: 'center' }}>
+                  위 검색바에서 영화를 검색하여 추가하세요
+                </div>
+              ) : (
+                titles.map((title, index) => (
+                  <div key={index} className="movie-item">
+                    <span className="movie-title">{title}</span>
+                    <button 
+                      className="remove-btn"
+                      onClick={() => setTitles(prev => prev.filter((_, i) => i !== index))}
+                      title="삭제"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
             <div className="row" style={{ marginTop: '10px' }}>
               <div style={{ flex: 1 }}>
                 <label className="hint">언어 (TMDb 응답 언어)</label>
@@ -167,6 +193,12 @@ function MainAnalysis() {
       </div>
 
       <footer className="page-footer">© TF‑IDF Recommender • TMDb/OMDb 데이터를 사용합니다.</footer>
+
+      <MovieDetailModal 
+        movie={selectedMovie}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
     </div>
   )
 }

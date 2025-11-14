@@ -5,6 +5,7 @@ from flask import Flask
 from flask_cors import CORS
 from config import Config
 from api import api_bp
+from database import init_db
 
 
 def create_app():
@@ -15,16 +16,26 @@ def create_app():
     app.config.from_object(Config)
     
     # CORS 설정 (React 프론트엔드와 통신)
+    # 릴리즈 환경에서는 Nginx 프록시를 통해 같은 origin에서 요청이 오므로
+    # 모든 origin을 허용하거나, 프록시 헤더를 신뢰하도록 설정
     CORS(app, resources={
         r"/api/*": {
-            "origins": ["http://localhost:3000", "http://localhost:5173"],
+            "origins": "*",  # 모든 origin 허용 (Nginx 프록시 환경)
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type"]
+            "allow_headers": ["Content-Type", "Authorization"]
         }
     })
     
     # Blueprint 등록
     app.register_blueprint(api_bp)
+    
+    # 데이터베이스 초기화
+    with app.app_context():
+        try:
+            init_db()
+            print("[성공] 데이터베이스 테이블이 초기화되었습니다.")
+        except Exception as e:
+            print(f"[경고] 데이터베이스 초기화 실패: {e}")
     
     return app
 

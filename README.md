@@ -46,17 +46,17 @@ TMDB_API_KEY=your_tmdb_api_key
 OMDB_API_KEY=your_omdb_api_key
 ```
 
-### 2️⃣ 프로덕션 모드 (권장)
+### 2️⃣ 프로덕션(배포) 모드 (권장)
 
 ```bash
 # Docker Compose로 빌드 및 실행
-docker-compose up --build
+docker-compose -f docker-compose.prod.yml up -d --build
 
 # 백그라운드 실행
-docker-compose up -d
+docker compose up -d
 
 # 중지
-docker-compose down
+docker compose down
 ```
 
 **접속:**
@@ -67,13 +67,13 @@ docker-compose down
 
 ```bash
 # 개발 모드로 실행 (코드 변경 시 자동 새로고침)
-docker-compose -f docker-compose.dev.yml up
+docker compose -f docker compose.dev.yml up
 
 # 백그라운드 실행
-docker-compose -f docker-compose.dev.yml up -d
+docker compose -f docker compose.dev.yml up -d
 
 # 중지
-docker-compose -f docker-compose.dev.yml down
+docker compose -f docker compose.dev.yml down
 ```
 
 **접속:**
