@@ -13,6 +13,12 @@ services:
     # ports: (Nginx 프록시를 통해서만 통신하므로 외부에 노출 안 함)
     # volumes: (코드가 Dockerfile에서 COPY되어 이미지에 포함됨)
     # ------------
+
+    # --- 추가 ---
+    # API는 DB가 실행된 후에 시작되어야 함
+    depends_on:
+      - db
+    # ------------
     restart: always
     networks:
       - movie-network
@@ -24,13 +30,37 @@ services:
       dockerfile: Dockerfile
     container_name: movie-reco-frontend-prod
     ports:
-      # ★ 변경: 호스트의 80번 포트(HTTP)를 컨테이너의 80번(Nginx)과 연결
-      - "80:80"
+      # ★ 호스트의 80번 포트(HTTP)를 컨테이너의 80번(Nginx)과 연결
+      - '80:80'
     depends_on:
       - api
     restart: always
     networks:
       - movie-network
+
+  # 3. PostgreSQL 데이터베이스 (배포용)
+  # --- DB 서비스 추가 ---
+  db:
+    image: postgres:15-alpine
+    container_name: movie-reco-db-prod # (이름 변경)
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-movie_reviews}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    # --- 제거 ---
+    # ports: (보안을 위해 DB 포트는 외부에 노출하지 않음)
+    # ------------
+    volumes:
+      # 개발용 볼륨과 충돌하지 않도록 이름 변경
+      - postgres_data_prod:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - movie-network
+  # ---------------------------------
+
+# --- 누락되었던 볼륨 정의 추가 ---
+volumes:
+  postgres_data_prod:
 
 networks:
   movie-network:

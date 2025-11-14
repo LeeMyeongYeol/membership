@@ -60,6 +60,7 @@ docker compose down
 ```
 
 **접속:**
+
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 
@@ -77,12 +78,14 @@ docker compose -f docker compose.dev.yml down
 ```
 
 **접속:**
+
 - Frontend (Dev): http://localhost:3000
 - Backend API (Dev): http://localhost:8000
 
 ### 4️⃣ 로컬 개발 (Docker 없이)
 
 #### Backend:
+
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -90,6 +93,7 @@ python app.py
 ```
 
 #### Frontend:
+
 ```bash
 cd frontend
 npm install
@@ -99,12 +103,15 @@ npm run dev
 ## 📡 API 엔드포인트
 
 ### `GET /`
+
 헬스 체크 및 API 정보
 
 ### `POST /api/analyze`
+
 영화 취향 분석 및 추천
 
 **Request:**
+
 ```json
 {
   "titles": ["기생충", "인셉션", "라라랜드"],
@@ -113,6 +120,7 @@ npm run dev
 ```
 
 **Response:**
+
 ```json
 {
   "favorites": [...],
@@ -127,6 +135,7 @@ npm run dev
 ## 🛠️ 기술 스택
 
 ### Backend
+
 - Python 3.10
 - Flask 3.0
 - scikit-learn (TF-IDF)
@@ -134,6 +143,7 @@ npm run dev
 - Docker
 
 ### Frontend
+
 - React 18
 - Vite
 - Axios
@@ -141,21 +151,25 @@ npm run dev
 - Docker
 
 ### APIs
+
 - TMDb API (영화 데이터)
 - OMDb API (IMDb 평점)
 
 ## 📦 주요 기능
 
 1. **영화 검색 및 매칭**
+
    - TMDb API를 통한 정확한 영화 검색
    - 다국어 지원 (한국어, 영어, 일본어)
 
 2. **TF-IDF 기반 추천**
+
    - 장르, 키워드, 감독, 배우 등을 종합 분석
    - 코사인 유사도 기반 스코어링
    - 인기도 보너스 적용
 
 3. **패턴 분석**
+
    - 선호 장르 분석
    - 자주 등장하는 감독/배우
    - TF-IDF 상위 특징 추출
@@ -167,16 +181,16 @@ npm run dev
 
 ## 🔧 환경 변수
 
-| 변수 | 설명 | 기본값 |
-|------|------|--------|
-| `TMDB_API_KEY` | TMDb API 키 (필수) | - |
-| `OMDB_API_KEY` | OMDb API 키 (선택) | - |
-<!-- | `CANDIDATE_LIMIT` | 후보 영화 최대 개수 | 150 |
-| `TOPN` | 추천 영화 개수 | 20 |
-| `ENRICH_TOP` | OMDb 정보 추가할 영화 개수 | 10 |
-| `MAX_WORKERS` | 병렬 처리 워커 수 | 8 |
-| `PORT` | 백엔드 포트 | 8000 |
-| `DEBUG` | 디버그 모드 | True | -->
+| 변수           | 설명                       | 기본값              |
+| -------------- | -------------------------- | ------------------- | --- |
+| `TMDB_API_KEY` | TMDb API 키 (필수)         | -                   |
+| `OMDB_API_KEY` | OMDb API 키 (선택)         | -                   |
+| <!--           | `CANDIDATE_LIMIT`          | 후보 영화 최대 개수 | 150 |
+| `TOPN`         | 추천 영화 개수             | 20                  |
+| `ENRICH_TOP`   | OMDb 정보 추가할 영화 개수 | 10                  |
+| `MAX_WORKERS`  | 병렬 처리 워커 수          | 8                   |
+| `PORT`         | 백엔드 포트                | 8000                |
+| `DEBUG`        | 디버그 모드                | True                | --> |
 
 ## 📝 라이센스
 
