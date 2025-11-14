@@ -18,6 +18,8 @@ services:
     volumes:
       # 로컬 백엔드 코드를 컨테이너와 동기화 (개발 시 유용)
       - ./backend:/app
+    depends_on:
+      - db
     restart: always
     networks:
       - movie-network
@@ -35,6 +37,25 @@ services:
     restart: always
     networks:
       - movie-network
+
+  # 3. PostgreSQL 데이터베이스
+  db:
+    image: postgres:15-alpine
+    container_name: movie-reco-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-movie_reviews}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - movie-network
+
+volumes:
+  postgres_data:
 
 networks:
   movie-network:

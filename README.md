@@ -67,13 +67,13 @@ docker-compose down
 
 ```bash
 # 개발 모드로 실행 (코드 변경 시 자동 새로고침)
-docker-compose -f docker-compose.dev.yml up
+docker-compose -f docker compose.dev.yml up
 
 # 백그라운드 실행
-docker-compose -f docker-compose.dev.yml up -d
+docker-compose -f docker compose.dev.yml up -d
 
 # 중지
-docker-compose -f docker-compose.dev.yml down
+docker-compose -f docker compose.dev.yml down
 ```
 
 **접속:**
