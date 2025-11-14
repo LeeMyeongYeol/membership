@@ -223,25 +223,60 @@ function PopularMovies() {
   };
 
   // 영화 클릭 핸들러
+  // PopularMovies.jsx의 handleMovieClick 함수 수정
+
   const handleMovieClick = async (movie) => {
-    // 필요한 데이터 보강
-    const enrichedMovie = {
+    // 이미 상세 정보가 로드된 경우 (예: API 응답에 이미 포함된 경우)
+    if (movie.overview && movie.genres?.length > 0) {
+      setSelectedMovie(movie);
+      setIsModalOpen(true);
+      return;
+    }
+
+    // --- 상세 정보가 없는 경우 (대부분의 경우) ---
+    // 1. 일단 기본 정보로 모달을 열고
+    setSelectedMovie({
       ...movie,
-      id: movie.id,
-      title: movie.title,
-      poster: movie.poster,
-      year: movie.year,
-      // MainAnalysis와 호환성을 위해 release_date 추가
       release_date: movie.year ? `${movie.year}-01-01` : null,
       // 기본값 설정
-      genres: movie.genres || [],
-      overview: movie.overview || '',
-      vote_average: movie.vote_average || 0,
-      vote_count: movie.vote_count || 0,
-      runtime: movie.runtime || null,
-    };
-    setSelectedMovie(enrichedMovie);
+      genres: [],
+      overview: '상세 정보를 불러오는 중...',
+      vote_average: 0,
+      vote_count: 0,
+      runtime: null,
+    });
     setIsModalOpen(true);
+
+    try {
+      // 2. TMDB에서 상세 정보 API 호출 (movie.id 사용)
+      const detailUrl = `https://api.themoviedb.org/3/movie/${
+        movie.id
+      }?api_key=${encodeURIComponent(
+        TMDB_API_KEY_FRONT
+      )}&language=ko-KR&append_to_response=credits`;
+
+      const response = await axios.get(detailUrl);
+      const details = response.data;
+
+      // 3. 받아온 상세 정보로 selectedMovie 상태 업데이트
+      setSelectedMovie({
+        ...movie, // 기존의 id, title, poster, year, source
+        // --- TMDB 상세 정보로 덮어쓰기 ---
+        overview: details.overview || '줄거리 정보가 없습니다.',
+        genres: (details.genres || []).map((g) => g.name),
+        runtime: details.runtime || null,
+        vote_average: details.vote_average || 0,
+        vote_count: details.vote_count || 0,
+        release_date: details.release_date || `${movie.year}-01-01`,
+      });
+    } catch (error) {
+      console.error('영화 상세 정보 로드 실패:', error);
+      // 에러 발생 시 모달 내부 정보 업데이트
+      setSelectedMovie((prevMovie) => ({
+        ...prevMovie,
+        overview: '상세 정보를 불러오는 데 실패했습니다.',
+      }));
+    }
   };
 
   // 초기 로드
