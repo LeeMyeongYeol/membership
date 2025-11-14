@@ -1,0 +1,24 @@
+name: MainProduct CI/CD (self-hosted)
+
+on:
+  push:
+    branches:
+      - release    # release 브랜치에 push될 때마다 배포 (원하면 main으로 바꿔도 됨)
+
+jobs:
+  deploy:
+    runs-on: self-hosted   # 방금 만든 러너에서 실행
+
+    steps:
+      - name: 배포 코드 최신으로 맞추기
+        run: |
+          cd /home/edu07/membership/MainProduct
+          git fetch origin
+          git reset --hard origin/release
+
+      - name: Docker Compose로 빌드 & 배포
+        run: |
+          cd /home/edu07/membership/MainProduct
+          docker compose -f docker-compose.prod.yml down || true
+          docker compose -f docker-compose.prod.yml up -d --build
+
